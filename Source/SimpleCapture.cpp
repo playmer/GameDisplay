@@ -72,16 +72,20 @@ inline auto CreateDirect3DDevice(IDXGIDevice* dxgi_device)
     return d3d_device.as<winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
 }
 
-SizeInt32 GetClientSize(HWND aWindowHandle)
+SizeInt32 SimpleCapture::GetClientSize()
 {
-    RECT rect;
-    SizeInt32 size;
+    //RECT rect;
+    //SizeInt32 size;
+    //
+    //GetWindowRect(aWindowHandle, &rect);
+    ////GetClientRect(aWindowHandle, &rect);
+    //
+    //size.Width = rect.right - rect.left;
+    //size.Height = rect.bottom - rect.top;
+    //return size;
 
-    GetWindowRect(aWindowHandle, &rect);
     
-    size.Width = rect.right - rect.left;
-    size.Height = rect.bottom - rect.top;
-    return size;
+    return m_item.Size();
 }
 
 SimpleCapture::SimpleCapture(
@@ -102,9 +106,9 @@ SimpleCapture::SimpleCapture(
     auto d3dDevice = GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
     d3dDevice->GetImmediateContext(m_d3dContext.put());
 
-    SizeInt32 size = GetClientSize(aWindowHandle);
+    SizeInt32 size = m_item.Size();
 
-    ResetTexture();
+    ResetTexture(size);
 
     // Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
     m_framePool = Direct3D11CaptureFramePool::Create(
@@ -126,18 +130,16 @@ void SimpleCapture::StartCapture()
 }
 
 
-void SimpleCapture::ResetTexture()
+void SimpleCapture::ResetTexture(SizeInt32 aSize)
 {
-    SizeInt32 size = GetClientSize(mWindowHandle);
-
-    std::vector<unsigned char> blankData(size.Width * size.Height * 4, 0);
+    std::vector<unsigned char> blankData(aSize.Width * aSize.Height * 4, 0);
     mTexture.detach();
     mTextureView.detach();
 
     D3D11_TEXTURE2D_DESC desc;
     ZeroMemory(&desc, sizeof(desc));
-    desc.Width = static_cast<UINT>(size.Width);
-    desc.Height = static_cast<UINT>(size.Height);
+    desc.Width = static_cast<UINT>(aSize.Width);
+    desc.Height = static_cast<UINT>(aSize.Height);
     desc.MipLevels = 1;
     desc.ArraySize = 1;
     desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -213,7 +215,7 @@ void SimpleCapture::ResizeIfRequired()
             2,
             mLastSize);
     
-        ResetTexture();
+        ResetTexture(mLastSize);
     }
 }
 

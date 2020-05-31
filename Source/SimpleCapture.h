@@ -81,7 +81,8 @@ private:
         }
     }
 
-    void ResetTexture();
+    void ResetTexture(winrt::Windows::Graphics::SizeInt32 aSize);
+    winrt::Windows::Graphics::SizeInt32 GetClientSize();
 
 
 private:

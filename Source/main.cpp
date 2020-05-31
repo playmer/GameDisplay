@@ -281,23 +281,14 @@ struct ImageDisplay
     ImVec2 Position;
 };
 
+// https://codereview.stackexchange.com/a/70916
 ImageDisplay StretchToFit(ImVec2 aImageResolution, ImVec2 aWindowResolution)
 {
-    const unsigned imageWidth = aImageResolution.x;
-    const unsigned imageHeight = aImageResolution.y;
-    const unsigned screenWidth = aWindowResolution.x;
-    const unsigned screenHeight = aWindowResolution.y;
+    float scaleHeight = aWindowResolution.y / aImageResolution.y;
+    float scaleWidth = aWindowResolution.x / aImageResolution.x;
+    float scale = std::min(scaleHeight, scaleWidth);
 
-    const unsigned imageRatio = imageWidth / imageHeight;
-    const unsigned screenRatio = aWindowResolution.x / aWindowResolution.y;
-
-    auto dimensions = screenRatio > imageRatio ? 
-        ImVec2(imageWidth * screenHeight / imageHeight, screenHeight) : 
-        ImVec2(screenWidth, imageHeight * screenWidth / imageWidth);
-
-    auto position = ImVec2((screenHeight - dimensions.y)/2, (screenWidth - dimensions.x)/2);
-
-    return ImageDisplay{ dimensions, position };
+    return ImageDisplay{ ImVec2(scale * aImageResolution.x, scale * aImageResolution.y), ImVec2(0.f, 0.f) };
 }
 
 
@@ -591,7 +582,7 @@ int main(int, char**)
     {
         auto io = ImGui::GetIO();
 
-        //drawWindows.ResizeIfRequired();
+        drawWindows.ResizeIfRequired();
 
 
         
@@ -603,7 +594,7 @@ int main(int, char**)
         ImGui::SetNextWindowPos(ImVec2(.0f, .0f));
         ImGui::SetNextWindowSize(io.DisplaySize);
         
-		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImColor(0.f, 0.f, 0.f, 0.f).Value);
+		//ImGui::PushStyleColor(ImGuiCol_FrameBg, ImColor(0.f, 0.f, 0.f, 0.f).Value);
         ImGui::Begin(
             "ImageWindow", 
             nullptr, 
@@ -616,7 +607,7 @@ int main(int, char**)
             ImGuiWindowFlags_NoBringToFrontOnFocus);
         drawWindows.Render();
         ImGui::End();
-        ImGui::PopStyleColor();
+        //ImGui::PopStyleColor();
 
 
 
