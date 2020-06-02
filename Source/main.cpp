@@ -12,6 +12,8 @@
 #include "SOIS/ApplicationContext.hpp"
 #include "SOIS/DX11Renderer.hpp"
 
+#include "SDL_scancode.h"
+
 #include "imgui/imgui_stdlib.h"
 #include "imgui/imgui_internal.h"
 
@@ -696,7 +698,14 @@ int main(int, char**)
 
             windowSelection.Update();
 
+            
+        
+            static bool fullscreen = false;
 
+            if (ImGui::Checkbox("Fullscreen", &fullscreen))
+            {
+                SDL_SetWindowFullscreen(context.mWindow, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+            }
             
             if (ImGui::Button("Capture Selected Window"))
             {
@@ -721,6 +730,7 @@ int main(int, char**)
             //ImGui::ColorPicker4("Clear Color", &context.mClearColor[0]);
         }
         ImGui::End();
+
     }
 
     return 0;
