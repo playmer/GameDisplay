@@ -72,7 +72,7 @@ inline auto CreateDirect3DDevice(IDXGIDevice* dxgi_device)
     return d3d_device.as<winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
 }
 
-SizeInt32 SimpleCapture::GetClientSize()
+SizeInt32 SimpleCapture::GetLastSize()
 {
     //RECT rect;
     //SizeInt32 size;
@@ -85,7 +85,56 @@ SizeInt32 SimpleCapture::GetClientSize()
     //return size;
 
     
-    return m_item.Size();
+    return mItem.Size();
+}
+
+POINT SimpleCapture::HeuristicClientPosition()
+{
+    RECT wrect;
+    GetWindowRect( mWindowHandle, &wrect );
+    RECT crect;
+    GetClientRect( mWindowHandle, &crect );
+    POINT lefttop = { crect.left, crect.top }; // Practicaly both are 0
+    ClientToScreen( mWindowHandle, &lefttop );
+    POINT rightbottom = { crect.right, crect.bottom };
+    ClientToScreen( mWindowHandle, &rightbottom );
+
+    int left_border = lefttop.x - wrect.left; // Windows 10: includes transparent part
+    int right_border = wrect.right - rightbottom.x; // As above
+    int bottom_border = wrect.bottom - rightbottom.y; // As above
+    int top_border_with_title_bar = lefttop.y - wrect.top; // There is no transparent part
+
+    return POINT{ 1, top_border_with_title_bar };
+}
+
+
+POINT SimpleCapture::ClientPositionInWindow()
+{
+    RECT rcClient, rcWind;
+    POINT ptDiff;
+    GetClientRect(mWindowHandle, &rcClient);
+    GetWindowRect(mWindowHandle, &rcWind);
+    ptDiff.x = (rcWind.right - rcWind.left) - rcClient.right;
+    ptDiff.y = (rcWind.bottom - rcWind.top) - rcClient.bottom;
+
+    POINT clientPosition{0, 0};
+    ClientToScreen(mWindowHandle, &clientPosition);
+
+    return ptDiff;
+}
+
+RECT SimpleCapture::ClientPositionInTexture()
+{  
+    RECT clientSize;
+    
+    SizeInt32 textureSize = mItem.Size();
+    GetClientRect(mWindowHandle, &clientSize);
+
+    POINT ptDiff;
+    ptDiff.x = textureSize.Width - clientSize.right;
+    ptDiff.y = textureSize.Height - clientSize.bottom;
+
+    return clientSize;
 }
 
 SimpleCapture::SimpleCapture(
@@ -96,7 +145,7 @@ SimpleCapture::SimpleCapture(
 {
     mWindowHandle = aWindowHandle;
     mD3DDevice = aD3DDevice;
-    m_item = CreateCaptureItemForWindow(aWindowHandle);
+    mItem = CreateCaptureItemForWindow(aWindowHandle);
     
     auto dxgiDevice = mD3DDevice.as<IDXGIDevice>();
 
@@ -106,35 +155,35 @@ SimpleCapture::SimpleCapture(
     auto d3dDevice = GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
     d3dDevice->GetImmediateContext(m_d3dContext.put());
 
-    SizeInt32 size = m_item.Size();
+    SizeInt32 size = mItem.Size();
 
     ResetTexture(size);
 
     // Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
-    m_framePool = Direct3D11CaptureFramePool::Create(
+    mFramePool = Direct3D11CaptureFramePool::Create(
         m_device,
         DirectXPixelFormat::B8G8R8A8UIntNormalized,
         2,
         size);
-    m_session = m_framePool.CreateCaptureSession(m_item);
-    m_session.IsCursorCaptureEnabled(false);
+    mSession = mFramePool.CreateCaptureSession(mItem);
+    mSession.IsCursorCaptureEnabled(false);
     mLastSize = size;
-    m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &SimpleCapture::OnFrameArrived });
+    mFrameArrived = mFramePool.FrameArrived(auto_revoke, { this, &SimpleCapture::OnFrameArrived });
 }
 
 // Start sending capture frames
 void SimpleCapture::StartCapture()
 {
     CheckClosed();
-    m_session.StartCapture();
+    mSession.StartCapture();
 }
 
 
 void SimpleCapture::ResetTexture(SizeInt32 aSize)
 {
     std::vector<unsigned char> blankData(aSize.Width * aSize.Height * 4, 0);
-    mTexture.detach();
-    mTextureView.detach();
+    mTexture = nullptr;
+    mTextureView = nullptr;
 
     D3D11_TEXTURE2D_DESC desc;
     ZeroMemory(&desc, sizeof(desc));
@@ -171,13 +220,13 @@ void SimpleCapture::Close()
     auto expected = false;
     if (m_closed.compare_exchange_strong(expected, true))
     {
-        m_frameArrived.revoke();
-        m_framePool.Close();
-        m_session.Close();
+        mFrameArrived.revoke();
+        mFramePool.Close();
+        mSession.Close();
 
-        m_framePool = nullptr;
-        m_session = nullptr;
-        m_item = nullptr;
+        mFramePool = nullptr;
+        mSession = nullptr;
+        mItem = nullptr;
     }
 }
 
@@ -209,7 +258,7 @@ void SimpleCapture::ResizeIfRequired()
 {
     if (mNewSize)
     {
-        m_framePool.Recreate(
+        mFramePool.Recreate(
             m_device,
             DirectXPixelFormat::B8G8R8A8UIntNormalized,
             2,

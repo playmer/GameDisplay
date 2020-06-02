@@ -287,8 +287,13 @@ ImageDisplay StretchToFit(ImVec2 aImageResolution, ImVec2 aWindowResolution)
     float scaleHeight = aWindowResolution.y / aImageResolution.y;
     float scaleWidth = aWindowResolution.x / aImageResolution.x;
     float scale = std::min(scaleHeight, scaleWidth);
+    
+    auto dimensions = ImVec2(scale * aImageResolution.x, scale * aImageResolution.y);
+    auto position = ImVec2(0.f, 0.f);
+    
+    position = ImVec2((aWindowResolution.x - dimensions.x)/2, (aWindowResolution.y - dimensions.y)/2);
 
-    return ImageDisplay{ ImVec2(scale * aImageResolution.x, scale * aImageResolution.y), ImVec2(0.f, 0.f) };
+    return ImageDisplay{ dimensions, position };
 }
 
 
@@ -324,18 +329,51 @@ struct DrawTextures
 
     void Render()
     {
+        static bool zeroPosition = false;
         for (auto& window : mTextures)
         {
             auto drawData = window->GetDrawData();
             auto dimensions = GetRenderDimensions(ImVec2(drawData.mWidth, drawData.mHeight));
+            
+            auto heuristicClientPosition = window->HeuristicClientPosition();
+            auto clientPosition = window->ClientPositionInWindow();
+            auto textureSize = window->GetLastSize();
+
+            RECT windowPosition;
+            GetWindowRect(window->GetWindowHandle(), &windowPosition);
+            
+            RECT clientRect;
+            GetClientRect(window->GetWindowHandle(), &clientRect);
+            
+            POINT clientPositionInScreen{0, 0};
+            ClientToScreen(window->GetWindowHandle(), &clientPositionInScreen);
 
             ImGui::Begin("DebugText");
+            ImGui::LabelText("WindowPosition", "WindowPosition: LT{%d, %d}, RB{%d, %d}", windowPosition.left, windowPosition.top, windowPosition.right, windowPosition.bottom);
+            ImGui::LabelText("ClientPositionInScreen", "ClientPositionInScreen: %f, %f", clientPositionInScreen.x, clientPositionInScreen.y);
+            ImGui::LabelText("ClientPositionInImage", "ClientPositionInImage: %f, %f", (float)clientPosition.x, (float)clientPosition.y);
             ImGui::LabelText("ImagePosition", "ImagePosition : %f, %f", dimensions.Position.x, dimensions.Position.y);
-            ImGui::LabelText("ImageDimention", "ImageDimention: %f, %f", dimensions.Dimensions.x, dimensions.Dimensions.y);
+            ImGui::LabelText("ImageDimension", "ImageDimension: %f, %f", dimensions.Dimensions.x, dimensions.Dimensions.y);
+            ImGui::Checkbox("Zero Out Position", &zeroPosition);
             ImGui::End();
             
-            ImGui::SetCursorPos(dimensions.Position);
-            ImGui::Image((void*)drawData.mTextureView, dimensions.Dimensions);
+            
+            ImGui::SetCursorPos(ImVec2{10.0f, 10.0f});
+            if (!zeroPosition)
+            {
+                ImGui::SetCursorPos(ImVec2{ dimensions.Position.x + 10, dimensions.Position.y + 10 });
+            }
+
+            ImVec2 uv1 = ImVec2{
+                (float)heuristicClientPosition.x / (float)clientRect.right,
+                (float)heuristicClientPosition.y / (float)clientRect.bottom};
+            
+
+            ImVec2 uv2 = ImVec2{
+                (float)clientRect.right  / (float)textureSize.Width,
+                (float)clientRect.bottom / (float)textureSize.Height};
+
+            ImGui::Image((void*)drawData.mTextureView, dimensions.Dimensions, uv1, uv2);
         }
     }
 
@@ -591,8 +629,10 @@ int main(int, char**)
 
         //sample.Update();
 
-        ImGui::SetNextWindowPos(ImVec2(.0f, .0f));
-        ImGui::SetNextWindowSize(io.DisplaySize);
+        ImGui::SetNextWindowPos(ImVec2(-10.0f, -10.0f));
+        auto displaySize = ImVec2{ io.DisplaySize.x + 20, io.DisplaySize.y + 20};
+
+        ImGui::SetNextWindowSize(displaySize);
         
 		//ImGui::PushStyleColor(ImGuiCol_FrameBg, ImColor(0.f, 0.f, 0.f, 0.f).Value);
         ImGui::Begin(

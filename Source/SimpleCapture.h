@@ -67,6 +67,11 @@ public:
     {
         return mWindowHandle;
     }
+    
+    POINT SimpleCapture::HeuristicClientPosition();
+    POINT ClientPositionInWindow();
+    RECT ClientPositionInTexture();
+    winrt::Windows::Graphics::SizeInt32 GetLastSize();
 
 private:
     void OnFrameArrived(
@@ -82,14 +87,13 @@ private:
     }
 
     void ResetTexture(winrt::Windows::Graphics::SizeInt32 aSize);
-    winrt::Windows::Graphics::SizeInt32 GetClientSize();
 
 
 private:
     HWND mWindowHandle = NULL;
-    winrt::Windows::Graphics::Capture::GraphicsCaptureItem m_item{ nullptr };
-    winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool m_framePool{ nullptr };
-    winrt::Windows::Graphics::Capture::GraphicsCaptureSession m_session{ nullptr };
+    winrt::Windows::Graphics::Capture::GraphicsCaptureItem mItem{ nullptr };
+    winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool mFramePool{ nullptr };
+    winrt::Windows::Graphics::Capture::GraphicsCaptureSession mSession{ nullptr };
     winrt::Windows::Graphics::SizeInt32 mLastSize;
 
     winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice m_device{ nullptr };
@@ -97,7 +101,7 @@ private:
     winrt::com_ptr<ID3D11Device> mD3DDevice;
     winrt::com_ptr<ID3D11Texture2D> mTexture;
     winrt::com_ptr<ID3D11ShaderResourceView> mTextureView;
-	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool::FrameArrived_revoker m_frameArrived;
+	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool::FrameArrived_revoker mFrameArrived;
     std::atomic<bool> m_closed = false;
     bool mNewSize = false;
 };
