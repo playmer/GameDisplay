@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <optional>
 
 #include <glm/glm.hpp>
 
@@ -13,6 +14,7 @@
 #include "SOIS/DX11Renderer.hpp"
 
 #include "SDL_scancode.h"
+#include "SDL_syswm.h"
 
 #include "imgui/imgui_stdlib.h"
 #include "imgui/imgui_internal.h"
@@ -29,188 +31,132 @@
 #include <dwmapi.h>
 #include <d3dcompiler.h>
 
-struct Window
-{
-public:
-    Window(nullptr_t) {}
-    Window(HWND hwnd, std::string const& title, std::string const& titleWithNumber, std::string& className)
-    {
-        mHwnd = hwnd;
-        mTitle = title;
-        mTitleWithNumber = titleWithNumber;
-        mClassName = className;
-    }
 
-    HWND mHwnd;
-    std::string mTitle;
-    std::string mTitleWithNumber;
-    std::string mClassName;
-};
-
-std::string AquireClassName(HWND hwnd)
-{
-	std::array<char, 1024> className;
-
-    ::GetClassNameA(hwnd, className.data(), (int)className.size());
-
-    std::string title(className.data());
-    return title;
-}
-
-std::string AquireWindowText(HWND hwnd)
-{
-	std::array<char, 1024> windowText;
-
-    ::GetWindowTextA(hwnd, windowText.data(), (int)windowText.size());
-
-    std::string title(windowText.data());
-    return title;
-}
-
-bool IsAltTabWindow(Window const& window)
-{
-    HWND hwnd = window.mHwnd;
-    HWND shellWindow = GetShellWindow();
-
-    auto title = window.mTitle;
-    auto className = window.mClassName;
-
-    if (hwnd == shellWindow)
-    {
-        return false;
-    }
-
-    if (title.length() == 0)
-    {
-        return false;
-    }
-
-    if (!IsWindowVisible(hwnd))
-    {
-        return false;
-    }
-
-    if (GetAncestor(hwnd, GA_ROOT) != hwnd)
-    {
-        return false;
-    }
-
-    LONG style = GetWindowLong(hwnd, GWL_STYLE);
-    if (!((style & WS_DISABLED) != WS_DISABLED))
-    {
-        return false;
-    }
-
-    DWORD cloaked = FALSE;
-    HRESULT hrTemp = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked));
-    if (SUCCEEDED(hrTemp) &&
-        cloaked == DWM_CLOAKED_SHELL)
-    {
-        return false;
-    }
-
-    return true;
-}
 
 namespace WindowEnumerationDetail 
 {
     int gWindowCounter = 0;
-}
-
-BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
-{
-    auto title = AquireWindowText(hwnd);
-    std::string titleWithNumber = std::to_string(WindowEnumerationDetail::gWindowCounter);
-    titleWithNumber += ": ";
-    titleWithNumber += title;
-
-    auto class_name = AquireClassName(hwnd);
-
-    auto window = Window(hwnd, title, titleWithNumber, class_name);
-
-    if (!IsAltTabWindow(window))
+    struct Window
     {
+    public:
+        Window(nullptr_t) {}
+        Window(HWND hwnd, std::string const& title, std::string const& titleWithNumber, std::string& className)
+        {
+            mHwnd = hwnd;
+            mTitle = title;
+            mTitleWithNumber = titleWithNumber;
+            mClassName = className;
+        }
+
+        HWND mHwnd;
+        std::string mTitle;
+        std::string mTitleWithNumber;
+        std::string mClassName;
+    };
+
+    std::string AquireClassName(HWND hwnd)
+    {
+	    std::array<char, 1024> className;
+
+        ::GetClassNameA(hwnd, className.data(), (int)className.size());
+
+        std::string title(className.data());
+        return title;
+    }
+
+    std::string AquireWindowText(HWND hwnd)
+    {
+	    std::array<char, 1024> windowText;
+
+        ::GetWindowTextA(hwnd, windowText.data(), (int)windowText.size());
+
+        std::string title(windowText.data());
+        return title;
+    }
+
+    bool IsAltTabWindow(Window const& window)
+    {
+        HWND hwnd = window.mHwnd;
+        HWND shellWindow = GetShellWindow();
+
+        auto title = window.mTitle;
+        auto className = window.mClassName;
+
+        if (hwnd == shellWindow)
+        {
+            return false;
+        }
+
+        if (title.length() == 0)
+        {
+            return false;
+        }
+
+        if (!IsWindowVisible(hwnd))
+        {
+            return false;
+        }
+
+        if (GetAncestor(hwnd, GA_ROOT) != hwnd)
+        {
+            return false;
+        }
+
+        LONG style = GetWindowLong(hwnd, GWL_STYLE);
+        if (!((style & WS_DISABLED) != WS_DISABLED))
+        {
+            return false;
+        }
+
+        DWORD cloaked = FALSE;
+        HRESULT hrTemp = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked));
+        if (SUCCEEDED(hrTemp) &&
+            cloaked == DWM_CLOAKED_SHELL)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
+    {
+        auto title = AquireWindowText(hwnd);
+        std::string titleWithNumber = std::to_string(WindowEnumerationDetail::gWindowCounter);
+        titleWithNumber += ": ";
+        titleWithNumber += title;
+
+        auto class_name = AquireClassName(hwnd);
+
+        auto window = Window(hwnd, title, titleWithNumber, class_name);
+
+        if (!IsAltTabWindow(window))
+        {
+            return TRUE;
+        }
+
+        std::vector<Window>& windows = *reinterpret_cast<std::vector<Window>*>(lParam);
+        windows.push_back(window);
+    
+        WindowEnumerationDetail::gWindowCounter++;
+
         return TRUE;
     }
 
-    std::vector<Window>& windows = *reinterpret_cast<std::vector<Window>*>(lParam);
-    windows.push_back(window);
-    
-    WindowEnumerationDetail::gWindowCounter++;
+    const std::vector<Window> EnumerateWindows()
+    {
+        std::vector<Window> windows;
+        EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&windows));
+        WindowEnumerationDetail::gWindowCounter = 0;
 
-    return TRUE;
+        return windows;
+    }
 }
-
-const std::vector<Window> EnumerateWindows()
-{
-    std::vector<Window> windows;
-    EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&windows));
-    WindowEnumerationDetail::gWindowCounter = 0;
-
-    return windows;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 struct WindowSelection
 {
-    std::vector<Window> mWindows;
-    Window* mSelectedWindow = nullptr;
+    std::vector<WindowEnumerationDetail::Window> mWindows;
+    WindowEnumerationDetail::Window* mSelectedWindow = nullptr;
 
     WindowSelection()
     {
@@ -219,7 +165,7 @@ struct WindowSelection
 
     void ResetWindows()
     {
-        mWindows = EnumerateWindows();
+        mWindows = WindowEnumerationDetail::EnumerateWindows();
 
         if (mWindows.size())
         {
@@ -255,6 +201,329 @@ struct WindowSelection
 
 
 
+struct ImageDisplay
+{
+    ImVec2 Dimensions;
+    ImVec2 Position;
+};
+
+// https://codereview.stackexchange.com/a/70916
+ImageDisplay StretchToFit(ImVec2 aImageResolution, ImVec2 aWindowResolution)
+{
+    float scaleHeight = aWindowResolution.y / aImageResolution.y;
+    float scaleWidth = aWindowResolution.x / aImageResolution.x;
+    float scale = std::min(scaleHeight, scaleWidth);
+    
+    auto dimensions = ImVec2(scale * aImageResolution.x, scale * aImageResolution.y);
+    auto position = ImVec2(0.f, 0.f);
+    
+    position = ImVec2((aWindowResolution.x - dimensions.x)/2, (aWindowResolution.y - dimensions.y)/2);
+
+    return ImageDisplay{ dimensions, position };
+}
+
+ImageDisplay GetRenderDimensions(ImVec2 aImageResolution)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    return StretchToFit(aImageResolution, io.DisplaySize);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+using WindowProcHandler = LRESULT (CALLBACK *)(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARAM wParam, _In_ LPARAM lParam);
+
+
+struct Win32WindowData
+{
+    SimpleCapture* mCapture; // The capture associated with the window.
+    WindowProcHandler mTheirOriginalProcHandler; // The original proc handler.
+    WindowProcHandler mOurOriginalProcHandler; // The original proc handler.
+};
+
+Win32WindowData* gWin32WindowData;
+
+
+glm::i32vec2 PositionFromLParam(LPARAM lParam)
+{
+    // Systems with multiple monitors can have negative x and y coordinates
+    return glm::vec2((int)(short)LOWORD(lParam), (int)(short)HIWORD(lParam));
+}
+
+LPARAM LParamFromPosition(glm::i32vec2 aPosition)
+{
+    // Systems with multiple monitors can have negative x and y coordinates
+    return MAKELPARAM(aPosition.x, aPosition.y);
+}
+
+glm::i32vec2 LocalScreenToClient(HWND aWindowHandle, LPARAM windowPosition)
+{
+    glm::i32vec2 screenPosition = PositionFromLParam(windowPosition);
+
+    POINT point;
+    point.x = screenPosition.x;
+    point.y = screenPosition.y;
+
+    ::ScreenToClient(aWindowHandle, &point);
+
+    glm::i32vec2 localPosition;
+
+
+    localPosition.x = point.x;
+    localPosition.y = point.y;
+
+    return localPosition;
+}
+
+std::optional<LPARAM> InClientRect(SimpleCapture* mCapture, glm::i32vec2 aClientMouse)
+{
+    auto size = mCapture->GetLastSize();
+    auto renderDimensions = GetRenderDimensions(ImVec2{ (float)size.Width, (float)size.Height });
+
+    auto top = renderDimensions.Position.y;
+    auto bottom = renderDimensions.Position.y + renderDimensions.Dimensions.y;
+    auto left = renderDimensions.Position.x;
+    auto right = renderDimensions.Position.x + renderDimensions.Dimensions.x;
+
+    if (left  <= aClientMouse.x && 
+        right  > aClientMouse.x &&
+        top   <= aClientMouse.y &&
+        bottom > aClientMouse.y)
+    {
+        printf("We in dat window boiiiiiii\n");
+
+        glm::vec2 adjustedClientMouse = aClientMouse;
+        adjustedClientMouse.x -= left;
+        adjustedClientMouse.y -= top;
+
+        adjustedClientMouse.x -= adjustedClientMouse.x / size.Width;
+        adjustedClientMouse.y -= adjustedClientMouse.y / size.Height;
+
+        return MAKELPARAM(adjustedClientMouse.x, adjustedClientMouse.y);
+    }
+    
+    printf("We not dat window fammmmm :(\n");
+
+    return std::nullopt;
+}
+
+static LRESULT WindowsMessageHandler(HWND aWindowHandle, UINT aMessage, WPARAM aWParam, LPARAM aLParam)
+{
+    try
+    {
+        switch (aMessage)
+        {
+            // Vertical Scroll
+            case WM_MOUSEWHEEL:
+            case WM_MOUSEHWHEEL:
+            {
+                glm::i32vec2 mousePosition = LocalScreenToClient(aWindowHandle, aLParam);
+                auto possibleLParam = InClientRect(gWin32WindowData->mCapture, mousePosition);
+            
+                if (!possibleLParam.has_value())
+                {
+                    break;
+                }
+            
+                aLParam = possibleLParam.value();
+            }
+        
+            // Mouse Button was pressed.
+            case WM_MOUSEMOVE:
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_XBUTTONDOWN:
+            case WM_LBUTTONUP:
+            case WM_RBUTTONUP:
+            case WM_MBUTTONUP:
+            case WM_XBUTTONUP:
+            {
+                auto possibleLParam = InClientRect(gWin32WindowData->mCapture, PositionFromLParam(aLParam));
+
+                if (!possibleLParam.has_value())
+                {
+                    break;
+                }
+            
+                aLParam = possibleLParam.value();
+            }
+            case WM_SYSDEADCHAR:
+                puts("WM_SYSDEADCHAR\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            case WM_SYSCHAR:
+                puts("WM_SYSCHAR\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            case WM_DEADCHAR:
+                puts("WM_DEADCHAR\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            case WM_CHAR:
+                puts("WM_CHAR\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            case WM_KEYDOWN:
+                puts("WM_KEYDOWN\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            case WM_SYSKEYDOWN:
+                puts("WM_SYSKEYDOWN\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            case WM_KEYUP:
+                puts("WM_KEYUP\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            case WM_ACTIVATE:
+                puts("WM_ACTIVATE\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            case WM_SYSKEYUP:
+                puts("WM_SYSKEYUP\n");
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+                break;
+            {
+                SendNotifyMessage(gWin32WindowData->mCapture->GetWindowHandle(), aMessage, aWParam, aLParam);
+            }
+    
+            ////////////////////////////////////////////////////////////////////
+            // Just need to call our thing, do not send to captured window
+            ////////////////////////////////////////////////////////////////////
+            case WM_CLOSE:
+            case WM_DESTROY:
+            case WM_KILLFOCUS:
+            case WM_SIZE:
+            default: 
+                break;
+        }
+
+        auto returnValue = CallWindowProc(gWin32WindowData->mOurOriginalProcHandler, aWindowHandle, aMessage, aWParam, aLParam);
+        return returnValue;
+    }
+    catch (std::exception e)
+    {
+        std::cout << e.what();
+    }
+
+    return 0;
+}
+
+static LRESULT CALLBACK WindowsMessagePump(HWND aWindowHandle, UINT aMessage, WPARAM aWParam, LPARAM aLParam)
+{
+    return WindowsMessageHandler(aWindowHandle, aMessage, aWParam, aLParam);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -277,53 +546,6 @@ std::unique_ptr<SimpleCapture> CaptureWindow(HWND aWindowHandle, SOIS::Applicati
 
 
 
-struct ImageDisplay
-{
-    ImVec2 Dimensions;
-    ImVec2 Position;
-};
-
-// https://codereview.stackexchange.com/a/70916
-ImageDisplay StretchToFit(ImVec2 aImageResolution, ImVec2 aWindowResolution)
-{
-    float scaleHeight = aWindowResolution.y / aImageResolution.y;
-    float scaleWidth = aWindowResolution.x / aImageResolution.x;
-    float scale = std::min(scaleHeight, scaleWidth);
-    
-    auto dimensions = ImVec2(scale * aImageResolution.x, scale * aImageResolution.y);
-    auto position = ImVec2(0.f, 0.f);
-    
-    position = ImVec2((aWindowResolution.x - dimensions.x)/2, (aWindowResolution.y - dimensions.y)/2);
-
-    return ImageDisplay{ dimensions, position };
-}
-
-
-
-
-ImageDisplay GetRenderDimensions(ImVec2 aImageResolution)
-{
-    ImGuiIO& io = ImGui::GetIO();
-    return StretchToFit(aImageResolution, io.DisplaySize);
-}
-
-
-
-
-struct Vertex
-{
-    glm::vec4 mPosition;
-    glm::vec4 mColor;
-    glm::vec2 mTextureCoordinates;
-};
-
-
-
-struct VS_CONSTANT_BUFFER
-{
-    glm::mat4 mWorldViewProj;
-};
-
 
 struct DrawTextures
 {
@@ -338,27 +560,10 @@ struct DrawTextures
             auto dimensions = GetRenderDimensions(ImVec2(drawData.mWidth, drawData.mHeight));
             
             auto heuristicClientPosition = window->HeuristicClientPosition();
-            auto clientPosition = window->ClientPositionInWindow();
             auto textureSize = window->GetLastSize();
 
-            RECT windowPosition;
-            GetWindowRect(window->GetWindowHandle(), &windowPosition);
-            
             RECT clientRect;
             GetClientRect(window->GetWindowHandle(), &clientRect);
-            
-            POINT clientPositionInScreen{0, 0};
-            ClientToScreen(window->GetWindowHandle(), &clientPositionInScreen);
-
-            ImGui::Begin("DebugText");
-            ImGui::LabelText("WindowPosition", "WindowPosition: LT{%d, %d}, RB{%d, %d}", windowPosition.left, windowPosition.top, windowPosition.right, windowPosition.bottom);
-            ImGui::LabelText("ClientPositionInScreen", "ClientPositionInScreen: %f, %f", clientPositionInScreen.x, clientPositionInScreen.y);
-            ImGui::LabelText("ClientPositionInImage", "ClientPositionInImage: %f, %f", (float)clientPosition.x, (float)clientPosition.y);
-            ImGui::LabelText("ImagePosition", "ImagePosition : %f, %f", dimensions.Position.x, dimensions.Position.y);
-            ImGui::LabelText("ImageDimension", "ImageDimension: %f, %f", dimensions.Dimensions.x, dimensions.Dimensions.y);
-            ImGui::Checkbox("Zero Out Position", &zeroPosition);
-            ImGui::End();
-            
             
             ImGui::SetCursorPos(ImVec2{10.0f, 10.0f});
             if (!zeroPosition)
@@ -605,6 +810,9 @@ int main(int, char**)
 
     SOIS::ApplicationContext context{config};
     gContext = &context;
+
+
+
     //SOIS::ImGuiSample sample;
 
     std::vector<FancyPoint> points;
@@ -714,8 +922,27 @@ int main(int, char**)
                     auto window = CaptureWindow(windowSelection.mSelectedWindow->mHwnd, context);
 
                     window->StartCapture();
+
+                    auto capture = window.get();
                     drawWindows.mTextures.clear();
                     drawWindows.mTextures.emplace_back(std::move(window));
+
+                    
+
+                    SDL_SysWMinfo wmInfo;
+                    SDL_VERSION(&wmInfo.version);
+                    SDL_GetWindowWMInfo(context.mWindow, &wmInfo);
+                    HWND hwnd = wmInfo.info.win.window;
+
+                    auto oldHandle = SetWindowLongPtrA(hwnd, GWLP_WNDPROC, (LONG_PTR)WindowsMessagePump);
+
+                    delete gWin32WindowData;
+                    
+                    gWin32WindowData = new Win32WindowData{ 
+                        capture, 
+                        (WindowProcHandler)GetWindowLongPtrA(capture->GetWindowHandle(), GWLP_WNDPROC), 
+                        (WindowProcHandler)oldHandle
+                    };
                 }
                 catch (std::exception e)
                 {
@@ -732,6 +959,7 @@ int main(int, char**)
         ImGui::End();
 
     }
-
+    
+    delete gWin32WindowData;
     return 0;
 }
